@@ -166,7 +166,7 @@ class Server:
             )
             self.db.commit()
             return {"savedAt": now}
-        if method == "original.open":
+        if method == "original.reveal":
             row = self.db.execute(
                 "SELECT path FROM photos WHERE id=?", (int(p["photoId"]),)
             ).fetchone()
@@ -175,7 +175,7 @@ class Server:
                     "PHOTO_MISSING", "The original photograph is no longer available."
                 )
             subprocess.Popen(
-                ["uwsm-app", "--", "imv", row["path"]],
+                ["uwsm-app", "--", "nautilus", "--select", Path(row["path"]).as_uri()],
                 start_new_session=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,

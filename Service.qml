@@ -166,8 +166,8 @@ Item {
     }, callback)
   }
 
-  function openOriginal(photoId) {
-    call("original.open", {photoId: photoId})
+  function revealOriginal(photoId) {
+    call("original.reveal", {photoId: photoId})
   }
 
   Process {

@@ -31,8 +31,8 @@ skipped today and then to any available photo.
 
 - `Left` and `Right` navigate within the current session.
 - `S` skips the current photo and advances.
-- `P` changes the prompt.
-- `O` opens the original photograph.
+- `P` changes the prompt; the prompt controls also move backward and forward.
+- `O` closes the overlay and reveals the original photograph in Files.
 - `Escape` closes the overlay.
 - `Ctrl+Enter` saves while the note editor is focused.
 

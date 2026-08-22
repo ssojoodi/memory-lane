@@ -25,6 +25,10 @@ function dirty(original, current) {
   return String(original || "") !== String(current || "")
 }
 
+function cyclePrompt(index, direction) {
+  return (index + direction + prompts.length) % prompts.length
+}
+
 function formatReflection(timestamp, note) {
   var date = new Date(timestamp)
   if (isNaN(date.getTime())) return String(note || "")
@@ -45,13 +49,14 @@ function keyboardAction(key, modifiers, editorFocused) {
   if (key === KEY_RIGHT) return "next"
   if (key === 83) return "skip"
   if (key === 80) return "prompt"
-  if (key === 79) return "open"
+  if (key === 79) return "reveal"
   return ""
 }
 
 if (typeof module !== "undefined") {
   module.exports = {
     prompts: prompts,
+    cyclePrompt: cyclePrompt,
     fileUrl: fileUrl,
     dirty: dirty,
     formatReflection: formatReflection,

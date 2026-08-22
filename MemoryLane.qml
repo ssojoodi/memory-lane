@@ -261,6 +261,14 @@ Item {
     })
   }
 
+  function revealOriginal() {
+    if (view !== "memory" || actionPending || !currentMemory)
+      return
+    var photoId = currentMemory.id
+    dismiss()
+    service.revealOriginal(photoId)
+  }
+
   function close() {
     requestToken += 1
     actionPending = false
@@ -372,8 +380,8 @@ Item {
             root.nextMemory()
           else if (action === "prompt")
             root.promptIndex = (root.promptIndex + 1) % Model.prompts.length
-          else if (action === "open" && root.currentMemory)
-            service.openOriginal(root.currentMemory.id)
+          else if (action === "reveal")
+            root.revealOriginal()
           else
             return
           event.accepted = true
@@ -381,18 +389,11 @@ Item {
 
         Column {
           anchors.fill: parent
-          spacing: Style.space(14)
-
-          Text {
-            text: "Memory Lane"
-            color: Color.menu.text
-            font.family: Style.font.menuFamily
-            font.pixelSize: Style.font.title
-          }
+          spacing: 0
 
           Item {
             width: parent.width
-            height: parent.height - Style.space(70)
+            height: parent.height
 
             Column {
               visible: root.view === "loading"
@@ -493,14 +494,17 @@ Item {
               }
             }
 
-            Row {
+            Column {
               visible: root.view === "memory"
               anchors.fill: parent
-              spacing: Style.space(22)
+              spacing: Style.space(10)
 
               Rectangle {
-                width: parent.width * .61
-                height: parent.height
+                width: parent.width
+                height: Math.max(
+                  Style.space(320),
+                  parent.height - annotationArea.height - parent.spacing
+                )
                 color: Qt.rgba(0, 0, 0, .22)
                 radius: Style.cornerRadius
 
@@ -515,27 +519,14 @@ Item {
               }
 
               Column {
-                width: parent.width * .36
-                height: parent.height
-                spacing: Style.space(12)
-
-                Text {
-                  width: parent.width
-                  wrapMode: Text.WordWrap
-                  text: root.prompt.text
-                  color: Color.menu.text
-                  font.pixelSize: Style.font.heading
-                }
-
-                Button {
-                  text: "Another prompt"
-                  onClicked: root.promptIndex = (root.promptIndex + 1) % Model.prompts.length
-                }
+                id: annotationArea
+                width: parent.width
+                spacing: Style.space(8)
 
                 Rectangle {
                   visible: root.reflection !== null
                   width: parent.width
-                  height: memoryText.implicitHeight + Style.space(20)
+                  height: visible ? memoryText.implicitHeight + Style.space(16) : 0
                   color: Qt.rgba(1, 1, 1, .07)
                   radius: Style.cornerRadius
                   border.color: Qt.rgba(
@@ -548,7 +539,7 @@ Item {
                   Text {
                     id: memoryText
                     anchors.fill: parent
-                    anchors.margins: Style.space(10)
+                    anchors.margins: Style.space(8)
                     wrapMode: Text.WordWrap
                     color: Color.menu.text
                     opacity: .82
@@ -562,54 +553,109 @@ Item {
                   }
                 }
 
-                Rectangle {
-                  width: parent.width
-                  height: Math.max(
-                    Style.space(150),
-                    parent.height - Style.space(root.reflection ? 300 : 220)
-                  )
-                  color: Qt.rgba(1, 1, 1, .05)
-                  radius: Style.cornerRadius
-                  border.color: Color.menu.border
-
-                  TextEdit {
-                    id: noteEditor
-                    anchors.fill: parent
-                    anchors.margins: Style.space(10)
-                    color: Color.menu.text
-                    font.pixelSize: Style.font.body
-                    wrapMode: TextEdit.Wrap
-                    selectByMouse: true
-                    textFormat: TextEdit.PlainText
-                  }
-
-                  Text {
-                    visible: noteEditor.text.length === 0
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.margins: Style.space(10)
-                    text: "What do you remember?"
-                    color: Color.menu.text
-                    opacity: .45
-                  }
-                }
-
                 Row {
+                  width: parent.width
+                  height: Style.space(58)
                   spacing: Style.space(8)
 
-                  Button {
-                    text: "Save"
-                    onClicked: root.save()
+                  Rectangle {
+                    id: promptControl
+                    width: parent.width * .36
+                    height: parent.height
+                    color: Qt.rgba(1, 1, 1, .05)
+                    radius: Style.cornerRadius
+                    border.color: Color.menu.border
+
+                    Row {
+                      anchors.fill: parent
+                      anchors.margins: Style.space(5)
+                      spacing: Style.space(5)
+
+                      Button {
+                        id: previousPrompt
+                        text: "<"
+                        tooltipText: "Previous prompt"
+                        horizontalPadding: Style.space(8)
+                        verticalPadding: Style.space(4)
+                        onClicked: root.promptIndex = Model.cyclePrompt(root.promptIndex, -1)
+                      }
+
+                      Text {
+                        width: parent.width - previousPrompt.width - nextPrompt.width - parent.spacing * 2
+                        anchors.verticalCenter: parent.verticalCenter
+                        elide: Text.ElideRight
+                        horizontalAlignment: Text.AlignHCenter
+                        text: root.prompt.text
+                        color: Color.menu.text
+                        font.pixelSize: Style.font.body
+                      }
+
+                      Button {
+                        id: nextPrompt
+                        text: ">"
+                        tooltipText: "Next prompt"
+                        horizontalPadding: Style.space(8)
+                        verticalPadding: Style.space(4)
+                        onClicked: root.promptIndex = Model.cyclePrompt(root.promptIndex, 1)
+                      }
+                    }
                   }
 
-                  Button {
-                    text: "Skip"
-                    onClicked: root.skip()
+                  Rectangle {
+                    width: parent.width - promptControl.width - actions.width - parent.spacing * 2
+                    height: parent.height
+                    color: Qt.rgba(1, 1, 1, .05)
+                    radius: Style.cornerRadius
+                    border.color: Color.menu.border
+
+                    TextEdit {
+                      id: noteEditor
+                      anchors.fill: parent
+                      anchors.margins: Style.space(8)
+                      clip: true
+                      color: Color.menu.text
+                      font.pixelSize: Style.font.body
+                      wrapMode: TextEdit.Wrap
+                      selectByMouse: true
+                      textFormat: TextEdit.PlainText
+                    }
+
+                    Text {
+                      visible: noteEditor.text.length === 0
+                      anchors.left: parent.left
+                      anchors.top: parent.top
+                      anchors.margins: Style.space(8)
+                      text: "What do you remember?"
+                      color: Color.menu.text
+                      opacity: .45
+                    }
                   }
 
-                  Button {
-                    text: "Open"
-                    onClicked: service.openOriginal(root.currentMemory.id)
+                  Row {
+                    id: actions
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Style.space(6)
+
+                    Button {
+                      iconText: "󰆓"
+                      tooltipText: "Save memory"
+                      fontFamily: "Symbols Nerd Font Mono"
+                      onClicked: root.save()
+                    }
+
+                    Button {
+                      iconText: "󰁔"
+                      tooltipText: "Skip photo"
+                      fontFamily: "Symbols Nerd Font Mono"
+                      onClicked: root.skip()
+                    }
+
+                    Button {
+                      iconText: "󰍉"
+                      tooltipText: "Show in Files"
+                      fontFamily: "Symbols Nerd Font Mono"
+                      onClicked: root.revealOriginal()
+                    }
                   }
                 }
               }

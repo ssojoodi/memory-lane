@@ -37,7 +37,7 @@ Notes remain in `~/.local/share/memory-lane/` unless removed separately.
 | `Left` / `Right` | Previous / next photo |
 | `S` | Skip and advance |
 | `P` | Change prompt |
-| `O` | Open original |
+| `O` | Reveal original in Files |
 | `Ctrl+Enter` | Save while editing |
 | `Escape` | Close |
 
@@ -55,7 +55,7 @@ more detail.
 ## Development
 
 Runtime dependencies are included with Omarchy 4: Python 3, SQLite, libvips,
-`imv`, and `omarchy-file-select`.
+Nautilus, and `omarchy-file-select`.
 
 Run the full checks with:
 

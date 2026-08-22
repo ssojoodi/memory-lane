@@ -121,6 +121,20 @@ class MemoryLaneTest(unittest.TestCase):
         result = server.dispatch("memory.next", {})
         self.assertEqual(result["memory"]["id"], photo_id)
 
+    def test_reveal_opens_file_manager_with_photo_selected(self):
+        photo_path = self.photos / "selected.png"
+        png(photo_path)
+        server = self.server()
+        server.dispatch("library.rootAdd", {"path": str(self.photos)})
+        scan_root(server.db, 1, self.photos, 1)
+        photo_id = server.db.execute("SELECT id FROM photos").fetchone()[0]
+        with patch("memory_lane.server.subprocess.Popen") as popen:
+            result = server.dispatch("original.reveal", {"photoId": photo_id})
+        self.assertEqual(result, {"opened": True})
+        command = popen.call_args.args[0]
+        self.assertEqual(command[:4], ["uwsm-app", "--", "nautilus", "--select"])
+        self.assertEqual(command[4], photo_path.as_uri())
+
 
 if __name__ == "__main__":
     unittest.main()
