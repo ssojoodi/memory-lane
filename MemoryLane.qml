@@ -618,6 +618,14 @@ Item {
                       wrapMode: TextEdit.Wrap
                       selectByMouse: true
                       textFormat: TextEdit.PlainText
+                      onTextChanged: {
+                        var limited = Model.truncateUtf8(text, Model.MAX_NOTE_BYTES)
+                        if (limited !== text) {
+                          var position = Math.min(cursorPosition, limited.length)
+                          text = limited
+                          cursorPosition = position
+                        }
+                      }
                     }
 
                     Text {

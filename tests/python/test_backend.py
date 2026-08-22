@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from memory_lane.database import connect
 from memory_lane.library import mime_type, scan_root
-from memory_lane.server import Server
+from memory_lane.server import ApiError, MAX_FRAME_BYTES, MAX_NOTE_BYTES, Server
 
 
 def png(path):
@@ -76,6 +76,32 @@ class MemoryLaneTest(unittest.TestCase):
         self.assertEqual(frames[0]["event"], "ready")
         self.assertTrue(frames[1]["ok"])
         self.assertFalse(frames[2]["ok"])
+
+    def test_note_limit_is_measured_in_utf8_bytes(self):
+        note = "é" * (MAX_NOTE_BYTES // 2 + 1)
+        with self.assertRaises(ApiError) as raised:
+            self.server().dispatch(
+                "draft.save", {"photoId": 1, "promptId": "where", "note": note}
+            )
+        self.assertEqual(raised.exception.code, "NOTE_TOO_LONG")
+
+    def test_oversized_response_becomes_a_bounded_error_frame(self):
+        incoming = io.StringIO(
+            json.dumps({"id": 1, "method": "app.status", "params": {}}) + "\n"
+        )
+        outgoing = io.StringIO()
+        server = self.server(incoming, outgoing)
+        with patch.object(
+            server, "dispatch", return_value={"value": "x" * MAX_FRAME_BYTES}
+        ):
+            server.run()
+        lines = outgoing.getvalue().splitlines()
+        response = json.loads(lines[1])
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "FRAME_TOO_LARGE")
+        self.assertTrue(
+            all(len(line.encode("utf-8")) + 1 <= MAX_FRAME_BYTES for line in lines)
+        )
 
     def test_private_database_mode(self):
         con = self.connection()

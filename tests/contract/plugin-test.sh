@@ -11,6 +11,12 @@ for entry in m["entryPoints"].values(): assert Path(entry).is_file(), entry
 PY
 if find . -type l -print -quit | grep -q .; then echo "Symlinks are not allowed" >&2; exit 1; fi
 python3 -m py_compile backend/memory_lane_backend.py backend/memory_lane/*.py
+python3 - <<'PY'
+from pathlib import Path
+service = Path("Service.qml").read_text()
+assert "StdioCollector" not in service
+assert 'splitMarker: ""' in service
+PY
 if rg -n 'urllib|requests|http.client|https?://' backend Service.qml MemoryLane.qml BarWidget.qml; then
   echo "Network-capable runtime source detected" >&2; exit 1
 fi

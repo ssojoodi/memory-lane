@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "MemoryLaneModel.js" as Model
 
 Item {
   id: root
@@ -10,14 +11,17 @@ Item {
   property bool ready: false
   property bool scanRunning: false
   property var scanProgress: ({seen: 0, eligible: 0, errors: 0})
-  property var status: ({onboarded: false, roots: [], eligibleCount: 0})
+  property var status: ({onboarded: false, eligibleCount: 0})
   property string lastError: ""
 
   property int nextId: 1
   property var callbacks: ({})
   property var queued: []
   property string chooserOutput: ""
+  property bool chooserOverflow: false
   property var chooserCallback: null
+
+  readonly property int maxFrameBytes: 16 * 1024
 
   readonly property string backendPath: manifest && manifest.__sourceDir
     ? manifest.__sourceDir + "/backend/memory_lane_backend.py"
@@ -126,8 +130,21 @@ Item {
     if (chooser.running)
       return
     chooserOutput = ""
+    chooserOverflow = false
     chooserCallback = callback || null
     chooser.running = true
+  }
+
+  function collectChooserOutput(chunk) {
+    var collected = Model.appendBounded(chooserOutput, chunk, maxFrameBytes)
+    if (!collected.overflow) {
+      chooserOutput = collected.value
+      return
+    }
+    chooserOverflow = true
+    chooserOutput = ""
+    lastError = "The folder chooser returned too much data."
+    chooser.running = false
   }
 
   function scan() {
@@ -173,19 +190,26 @@ Item {
   Process {
     id: chooser
     command: ["omarchy-file-select", "--directory"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: root.chooserOutput = text.trim()
+    stdout: SplitParser {
+      // An empty marker forwards chunks immediately instead of buffering until exit.
+      splitMarker: ""
+      onRead: function(chunk) {
+        root.collectChooserOutput(chunk)
+      }
     }
     onExited: function(exitCode) {
       var callback = root.chooserCallback
+      var selectedPath = root.chooserOutput.trim()
+      var overflow = root.chooserOverflow
       root.chooserCallback = null
-      if (exitCode !== 0 || !root.chooserOutput) {
+      root.chooserOutput = ""
+      root.chooserOverflow = false
+      if (overflow || exitCode !== 0 || !selectedPath) {
         if (callback)
           callback(null)
         return
       }
-      root.addRoot(root.chooserOutput, function(result, error) {
+      root.addRoot(selectedPath, function(result, error) {
         if (result)
           root.scan()
         if (callback)

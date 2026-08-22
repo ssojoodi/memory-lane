@@ -18,4 +18,16 @@ assert.equal(model.keyboardAction(0x01000012, 0, true), "")
 assert.equal(model.keyboardAction(83, 0, true), "")
 assert.equal(model.keyboardAction(79, 0, false), "reveal")
 assert.equal(model.fileUrl("/tmp/a b.jpg"), "file:///tmp/a%20b.jpg")
+assert.equal(model.utf8ByteLength("memory"), 6)
+assert.equal(model.utf8ByteLength("café"), 5)
+assert.equal(model.utf8ByteLength("📷"), 4)
+assert.equal(model.truncateUtf8("ab📷cd", 6), "ab📷")
+assert.deepEqual(
+  model.appendBounded("1234", "5678", 8),
+  {value: "12345678", overflow: false}
+)
+assert.deepEqual(
+  model.appendBounded("1234", "56789", 8),
+  {value: "", overflow: true}
+)
 console.log("MemoryLaneModel tests passed")

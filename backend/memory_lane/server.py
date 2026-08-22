@@ -11,8 +11,8 @@ from .paths import suggested_pictures
 from .previews import ensure_preview
 from .selection import select_next_photo
 
-MAX_FRAME = 1_048_576
-MAX_NOTE = 50_000
+MAX_FRAME_BYTES = 16 * 1024
+MAX_NOTE_BYTES = 8 * 1024
 
 
 class ApiError(Exception):
@@ -30,26 +30,24 @@ class Server:
         self.scan_running = False
 
     def emit(self, value):
+        frame = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        if len(frame.encode("utf-8")) + 1 > MAX_FRAME_BYTES:
+            raise ApiError("FRAME_TOO_LARGE", "The local service response is too large.")
         with self.write_lock:
-            self.out.write(json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n")
+            self.out.write(frame + "\n")
             self.out.flush()
 
     def status(self):
-        roots = [
-            dict(row)
-            for row in self.db.execute(
-                "SELECT id,path,enabled,last_completed_scan_at "
-                "FROM library_roots ORDER BY id"
-            )
-        ]
+        onboarded = self.db.execute(
+            "SELECT EXISTS(SELECT 1 FROM library_roots LIMIT 1)"
+        ).fetchone()[0]
         count = self.db.execute(
             "SELECT count(*) FROM photos p "
             "JOIN library_roots r ON r.id=p.root_id "
             "WHERE r.enabled=1 AND p.available=1 AND p.hidden_at IS NULL"
         ).fetchone()[0]
         return {
-            "onboarded": bool(roots),
-            "roots": roots,
+            "onboarded": bool(onboarded),
             "eligibleCount": count,
             "scanRunning": self.scan_running,
         }
@@ -126,7 +124,9 @@ class Server:
             self.db.commit()
             return {"saved": True}
         if method == "draft.save":
-            note = str(p.get("note", ""))[:MAX_NOTE]
+            note = str(p.get("note", ""))
+            if len(note.encode("utf-8")) > MAX_NOTE_BYTES:
+                raise ApiError("NOTE_TOO_LONG", "Keep memories under 8 KiB.")
             now = utcnow()
             self.db.execute(
                 "INSERT INTO drafts VALUES(?,?,?,?) "
@@ -141,8 +141,8 @@ class Server:
             note = str(p.get("note", "")).strip()
             if not note:
                 raise ApiError("NOTE_EMPTY", "Write something before saving.")
-            if len(note) > MAX_NOTE:
-                raise ApiError("NOTE_TOO_LONG", "The note is too long.")
+            if len(note.encode("utf-8")) > MAX_NOTE_BYTES:
+                raise ApiError("NOTE_TOO_LONG", "Keep memories under 8 KiB.")
             photo_id = int(p["photoId"])
             now = utcnow()
             self.db.execute(
@@ -226,7 +226,7 @@ class Server:
         for raw in self.inp:
             request_id = None
             try:
-                if len(raw.encode("utf-8")) > MAX_FRAME:
+                if len(raw.encode("utf-8")) > MAX_FRAME_BYTES:
                     raise ApiError("FRAME_TOO_LARGE", "Request is too large.")
                 request = json.loads(raw)
                 request_id = request.get("id")

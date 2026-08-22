@@ -17,6 +17,10 @@ contains its photo payload, editable note, reflection, and preview path. Async
 operations carry a request token so stale responses cannot replace newer UI
 state.
 
+Backend requests and responses are limited to 16 KiB per JSON line. Memory text
+is limited to 8 KiB of UTF-8, and folder-chooser output is collected in chunks
+with the same 16 KiB ceiling before it reaches application state.
+
 ## Photo selection
 
 The preferred pool is intentionally varied:
