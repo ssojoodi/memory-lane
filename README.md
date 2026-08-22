@@ -1,7 +1,9 @@
 # Memory Lane
 
-Memory Lane is a local-first Omarchy shell plugin for revisiting photographs and
-recording the stories behind them. It never uploads or modifies original files.
+Photos pile up, and the stories behind them are easy to lose. Memory Lane helps
+by resurfacing them one at a time so you can record the moments, people, and
+places that matter. It is a local-first Omarchy shell plugin that never uploads
+or modifies original files.
 
 ## Features
 
@@ -12,7 +14,23 @@ recording the stories behind them. It never uploads or modifies original files.
 - Metadata-stripped preview images
 - One-click access to the original photograph
 
-## Install from this checkout
+## Install
+
+Install and enable Memory Lane directly from its public repository:
+
+```bash
+omarchy plugin add https://github.com/ssojoodi/memory-lane.git --enable
+```
+
+Remove the plugin UI with:
+
+```bash
+omarchy plugin remove sojoodi.memory-lane --yes
+```
+
+Notes remain in `~/.local/share/memory-lane/` unless removed separately.
+
+## Development install
 
 ```bash
 bash scripts/install-local.sh
@@ -22,13 +40,7 @@ The installer copies runtime files to
 `~/.config/omarchy/plugins/sojoodi.memory-lane`, validates the plugin, enables
 it, and adds its photo icon to the right side of the bar.
 
-Run the same command after making local changes. To remove the plugin UI:
-
-```bash
-omarchy plugin remove sojoodi.memory-lane --yes
-```
-
-Notes remain in `~/.local/share/memory-lane/` unless removed separately.
+Run the same command after making local changes.
 
 ## Controls
 
@@ -52,10 +64,12 @@ Notes remain in `~/.local/share/memory-lane/` unless removed separately.
 See [docs/privacy.md](docs/privacy.md) and [docs/design.md](docs/design.md) for
 more detail.
 
-## Development
+## Dependencies
 
-Runtime dependencies are included with Omarchy 4: Python 3, SQLite, libvips,
-Nautilus, and `omarchy-file-select`.
+Memory Lane targets Omarchy 4 and uses Python 3, SQLite, libvips, Nautilus, and
+`omarchy-file-select`. These runtime dependencies are included with Omarchy 4.
+
+## Development
 
 Run the full checks with:
 

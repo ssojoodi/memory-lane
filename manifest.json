@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "author": "sojoodi",
   "license": "MIT",
-  "description": "Revisit a photograph and preserve the story behind it.",
+  "description": "Photos lose their stories. Resurface them and preserve the memories behind them.",
   "kinds": ["service", "overlay", "bar-widget"],
   "entryPoints": {
     "service": "Service.qml",
