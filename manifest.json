@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "sojoodi.memory-lane",
+  "name": "Memory Lane",
+  "version": "0.1.0",
+  "author": "sojoodi",
+  "license": "MIT",
+  "description": "Revisit a photograph and preserve the story behind it.",
+  "kinds": ["service", "overlay", "bar-widget"],
+  "entryPoints": {
+    "service": "Service.qml",
+    "overlay": "MemoryLane.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Memory Lane",
+    "description": "Open a photograph from your personal memory library.",
+    "category": "Personal",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
