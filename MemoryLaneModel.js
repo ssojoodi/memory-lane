@@ -82,6 +82,10 @@ function cyclePrompt(index, direction) {
   return (index + direction + prompts.length) % prompts.length
 }
 
+function rotateQuarterTurn(degrees) {
+  return (Number(degrees) + 90) % 360
+}
+
 function formatReflection(timestamp, note) {
   var date = new Date(timestamp)
   if (isNaN(date.getTime())) return String(note || "")
@@ -103,6 +107,7 @@ function keyboardAction(key, modifiers, editorFocused) {
   if (key === 83) return "skip"
   if (key === 80) return "prompt"
   if (key === 79) return "reveal"
+  if (key === 82) return "rotate"
   return ""
 }
 
@@ -116,6 +121,7 @@ if (typeof module !== "undefined") {
     dirty: dirty,
     formatReflection: formatReflection,
     keyboardAction: keyboardAction,
+    rotateQuarterTurn: rotateQuarterTurn,
     truncateUtf8: truncateUtf8,
     utf8ByteLength: utf8ByteLength
   }

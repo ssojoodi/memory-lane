@@ -29,6 +29,9 @@ Item {
   readonly property var currentMemory: currentEntry ? currentEntry.memory : null
   readonly property var reflection: currentEntry ? currentEntry.reflection : null
   readonly property string previewPath: currentEntry ? currentEntry.previewPath : ""
+  readonly property int previewRotation: currentEntry
+    ? (currentEntry.rotationDegrees || 0)
+    : 0
 
   function acquireService() {
     if (!service && shell && manifest)
@@ -44,16 +47,20 @@ Item {
       memory: memory,
       note: note || "",
       reflection: memory.reflection || null,
-      previewPath: ""
+      previewPath: "",
+      rotationDegrees: 0
     }
   }
 
-  function copyEntry(entry, note, reflection, previewPath) {
+  function copyEntry(entry, note, reflection, previewPath, rotationDegrees) {
     return {
       memory: entry.memory,
       note: note,
       reflection: reflection,
-      previewPath: previewPath
+      previewPath: previewPath,
+      rotationDegrees: rotationDegrees === undefined
+        ? (entry.rotationDegrees || 0)
+        : rotationDegrees
     }
   }
 
@@ -269,6 +276,20 @@ Item {
     service.revealOriginal(photoId)
   }
 
+  function rotatePreview() {
+    if (view !== "memory" || actionPending || !currentEntry)
+      return
+    var updated = copyEntry(
+      currentEntry,
+      currentEntry.note,
+      currentEntry.reflection,
+      currentEntry.previewPath,
+      Model.rotateQuarterTurn(currentEntry.rotationDegrees || 0)
+    )
+    replaceEntry(sessionIndex, updated)
+    currentEntry = updated
+  }
+
   function close() {
     requestToken += 1
     actionPending = false
@@ -382,6 +403,8 @@ Item {
             root.promptIndex = (root.promptIndex + 1) % Model.prompts.length
           else if (action === "reveal")
             root.revealOriginal()
+          else if (action === "rotate")
+            root.rotatePreview()
           else
             return
           event.accepted = true
@@ -500,6 +523,7 @@ Item {
               spacing: Style.space(10)
 
               Rectangle {
+                id: photoFrame
                 width: parent.width
                 height: Math.max(
                   Style.space(320),
@@ -507,14 +531,26 @@ Item {
                 )
                 color: Qt.rgba(0, 0, 0, .22)
                 radius: Style.cornerRadius
+                clip: true
 
-                Image {
-                  anchors.fill: parent
-                  anchors.margins: Style.space(8)
-                  source: root.previewPath ? Model.fileUrl(root.previewPath) : ""
-                  fillMode: Image.PreserveAspectFit
-                  asynchronous: true
-                  cache: false
+                Item {
+                  id: rotatedPreview
+                  anchors.centerIn: parent
+                  width: root.previewRotation % 180 === 0
+                    ? parent.width - Style.space(16)
+                    : parent.height - Style.space(16)
+                  height: root.previewRotation % 180 === 0
+                    ? parent.height - Style.space(16)
+                    : parent.width - Style.space(16)
+                  rotation: root.previewRotation
+
+                  Image {
+                    anchors.fill: parent
+                    source: root.previewPath ? Model.fileUrl(root.previewPath) : ""
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    cache: false
+                  }
                 }
               }
 
@@ -656,6 +692,13 @@ Item {
                       tooltipText: "Skip photo"
                       fontFamily: "Symbols Nerd Font Mono"
                       onClicked: root.skip()
+                    }
+
+                    Button {
+                      iconText: "󰑓"
+                      tooltipText: "Rotate preview clockwise"
+                      fontFamily: "Symbols Nerd Font Mono"
+                      onClicked: root.rotatePreview()
                     }
 
                     Button {

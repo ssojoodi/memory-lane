@@ -5,6 +5,8 @@ by resurfacing them one at a time so you can record the moments, people, and
 places that matter. It is a local-first Omarchy shell plugin that never uploads
 or modifies original files.
 
+![Memory Lane showing a photograph in its compact reflection overlay](preview.png)
+
 ## Features
 
 - Private scanning of user-approved folders
@@ -12,6 +14,7 @@ or modifies original files.
 - Fast keyboard navigation with session history
 - Local drafts and timestamped reflections
 - Metadata-stripped preview images
+- Session-only preview rotation that never changes the original
 - One-click access to the original photograph
 
 ## Install
@@ -49,6 +52,7 @@ Run the same command after making local changes.
 | `Left` / `Right` | Previous / next photo |
 | `S` | Skip and advance |
 | `P` | Change prompt |
+| `R` | Rotate the displayed preview 90° clockwise |
 | `O` | Reveal original in Files |
 | `Ctrl+Enter` | Save while editing |
 | `Escape` | Close |
@@ -58,6 +62,7 @@ Run the same command after making local changes.
 - Database: `${XDG_DATA_HOME:-~/.local/share}/memory-lane/memory-lane.sqlite3`
 - Previews: `${XDG_CACHE_HOME:-~/.cache}/memory-lane/previews/`
 - Source photos are opened read-only and never moved, renamed, or rewritten.
+- Preview rotation lasts only for the open session and is never written to disk.
 - The runtime makes no network requests.
 - Scanning begins only after folder approval and never follows symlinks.
 
