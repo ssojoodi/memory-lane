@@ -9,6 +9,11 @@ or modifies original files.
 
 ## Features
 
+- Library actions in the **⋯** menu: open a specific photo from an approved
+  folder (without waiting for a scan), or rescan folders in the background.
+  Rescans keep your current photo and unsaved text in place and report new photos.
+- Map-pin button opens embedded photo GPS coordinates on OpenStreetMap;
+  coordinates are shared only when clicked, never the photo or notes.
 - Private scanning of user-approved folders
 - Randomized presentation with occasional resurfacing of annotated photos
 - Fast keyboard navigation with session history

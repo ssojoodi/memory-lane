@@ -9,7 +9,9 @@ Item {
   property var shell: null
   property var manifest: null
   property bool ready: false
+  property bool failed: false
   property bool scanRunning: false
+  property string scanMessage: ""
   property var scanProgress: ({seen: 0, eligible: 0, errors: 0})
   property var status: ({onboarded: false, eligibleCount: 0})
   property string lastError: ""
@@ -20,14 +22,19 @@ Item {
   property string chooserOutput: ""
   property bool chooserOverflow: false
   property var chooserCallback: null
+  property bool choosingPhoto: false
 
   readonly property int maxFrameBytes: 16 * 1024
 
-  readonly property string backendPath: manifest && manifest.__sourceDir
-    ? manifest.__sourceDir + "/backend/memory_lane_backend.py"
-    : ""
+  readonly property string backendPath: decodeURIComponent(
+    Qt.resolvedUrl("backend/memory_lane_backend.py").toString().replace(/^file:\/\//, ""))
 
   function call(method, params, callback) {
+    if (failed) {
+      if (callback)
+        callback(null, {message: lastError})
+      return -1
+    }
     var request = {
       id: nextId++,
       method: method,
@@ -57,6 +64,14 @@ Item {
       pending[requestId](null, {message: message})
   }
 
+  function failService(message) {
+    startupTimeout.stop()
+    failed = true
+    ready = false
+    scanRunning = false
+    failPending(message)
+  }
+
   function handle(line) {
     var message
     try {
@@ -67,6 +82,9 @@ Item {
     }
 
     if (message.event === "ready") {
+      if (failed)
+        return
+      startupTimeout.stop()
       ready = true
       flush()
       initialize()
@@ -80,12 +98,15 @@ Item {
     if (message.event === "scan.complete") {
       scanRunning = false
       scanProgress = message.data
+      scanMessage = "Scan complete · " + (message.data.added || 0) + " new photos"
+        + (message.data.errors ? " · " + message.data.errors + " unreadable items" : "")
       refreshStatus()
       return
     }
     if (message.event === "scan.error") {
       scanRunning = false
       lastError = message.data.message || "Scan failed."
+      scanMessage = "Scan failed. " + lastError
       return
     }
 
@@ -132,6 +153,19 @@ Item {
     chooserOutput = ""
     chooserOverflow = false
     chooserCallback = callback || null
+    choosingPhoto = false
+    chooser.running = true
+  }
+
+  function choosePhoto(callback) {
+    if (chooser.running) {
+      callback(null, {message: "A file chooser is already open."})
+      return
+    }
+    chooserOutput = ""
+    chooserOverflow = false
+    chooserCallback = callback
+    choosingPhoto = true
     chooser.running = true
   }
 
@@ -148,9 +182,15 @@ Item {
   }
 
   function scan() {
-    call("library.scanStart", {}, function(result) {
-      if (result)
-        scanRunning = true
+    if (scanRunning)
+      return
+    scanRunning = true
+    scanMessage = "Scanning folders…"
+    call("library.scanStart", {}, function(result, error) {
+      if (!result) {
+        scanRunning = false
+        scanMessage = error ? error.message : "Could not start scanning."
+      }
     })
   }
 
@@ -187,9 +227,15 @@ Item {
     call("original.reveal", {photoId: photoId})
   }
 
+  function photoLocation(photoId, callback) {
+    call("photo.location", {photoId: photoId}, callback)
+  }
+
   Process {
     id: chooser
-    command: ["omarchy-file-select", "--directory"]
+    command: root.choosingPhoto
+      ? ["omarchy-file-select", "--title", "Open a photo from an approved folder", "--extensions", "jpg jpeg png webp"]
+      : ["omarchy-file-select", "--directory"]
     stdout: SplitParser {
       // An empty marker forwards chunks immediately instead of buffering until exit.
       splitMarker: ""
@@ -206,7 +252,11 @@ Item {
       root.chooserOverflow = false
       if (overflow || exitCode !== 0 || !selectedPath) {
         if (callback)
-          callback(null)
+          callback(null, overflow || exitCode > 1 ? {message: "Could not select the photo or folder."} : null)
+        return
+      }
+      if (root.choosingPhoto) {
+        root.call("memory.open", {path: selectedPath}, callback)
         return
       }
       root.addRoot(selectedPath, function(result, error) {
@@ -235,9 +285,19 @@ Item {
       }
     }
     onExited: function(exitCode) {
-      root.ready = false
-      if (exitCode !== 0)
-        root.failPending("Memory Lane's local service stopped. Reload the shell to restart it.")
+      if (!root.failed)
+        root.failService("Memory Lane's local service stopped. Reload the shell to restart it.")
+    }
+  }
+
+  Timer {
+    id: startupTimeout
+    interval: 10000
+    running: true
+    repeat: false
+    onTriggered: {
+      root.failService("Memory Lane's local service did not start within 10 seconds. Reload the shell to retry.")
+      backend.running = false
     }
   }
 }

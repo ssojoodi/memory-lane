@@ -11,6 +11,10 @@ keyboard-friendly loop for revisiting photographs and recording memories.
 - `backend/memory_lane/server.py` validates requests and performs actions.
 - `backend/memory_lane/selection.py` owns photo-selection policy.
 - SQLite stores approved roots, indexed photos, drafts, reflections, and events.
+- `backend/memory_lane/storage.py` owns safe database opening: it validates
+  directories and files through Linux descriptors and returns an
+  identity-checked SQLite connection. `database.py` configures that connection
+  and applies the schema; callers never handle descriptor paths or identities.
 
 The QML layer is the sole owner of session navigation state. Each session entry
 contains its photo payload, editable note, reflection, and preview path. Async
@@ -38,6 +42,10 @@ skipped today and then to any available photo.
 - `P` changes the prompt; the prompt controls also move backward and forward.
 - `O` closes the overlay and reveals the original photograph in Files.
 - `R` rotates the displayed preview clockwise without changing any file.
+- The map-pin button reads EXIF GPS from the original on demand with
+  `vipsheader` and opens an OpenStreetMap marker in the default browser.
+  Missing or invalid coordinates show an inline message; no new dependency,
+  database field, geocoding service, or embedded map is needed.
 - `Escape` closes the overlay.
 - `Ctrl+Enter` saves while the note editor is focused.
 

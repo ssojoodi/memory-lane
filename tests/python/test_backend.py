@@ -147,6 +147,38 @@ class MemoryLaneTest(unittest.TestCase):
         result = server.dispatch("memory.next", {})
         self.assertEqual(result["memory"]["id"], photo_id)
 
+    def test_open_specific_photo_without_scan_and_preserve_notes(self):
+        server = self.server()
+        server.dispatch("library.rootAdd", {"path": str(self.photos)})
+        target = self.photos / "new photo.png"
+        png(target)
+        memory = server.dispatch("memory.open", {"path": str(target)})["memory"]
+        server.dispatch("reflection.save", {"photoId": memory["id"], "promptId": "test", "promptText": "Test", "note": "Keep this"})
+        again = server.dispatch("memory.open", {"path": str(target)})["memory"]
+        self.assertEqual(again["id"], memory["id"])
+        self.assertEqual(again["reflection"]["note"], "Keep this")
+        self.assertEqual(scan_root(server.db, 1, self.photos, 10)["added"], 0)
+        png(self.photos / "another.png")
+        self.assertEqual(scan_root(server.db, 1, self.photos, 11)["added"], 1)
+        self.assertEqual(scan_root(server.db, 1, self.photos, 12)["added"], 0)
+
+    def test_open_specific_photo_rejects_outside_links_and_scan_conflicts(self):
+        server = self.server()
+        server.dispatch("library.rootAdd", {"path": str(self.photos)})
+        outside = self.base / "outside.png"
+        png(outside)
+        link = self.photos / "link.png"
+        link.symlink_to(outside)
+        bad = self.photos / "fake.png"
+        bad.write_text("not a photo")
+        for path in (outside, link, bad, self.photos / "missing.png"):
+            with self.subTest(path=path), self.assertRaises(ApiError):
+                server.dispatch("memory.open", {"path": str(path)})
+        server.scan_running = True
+        with self.assertRaises(ApiError) as error:
+            server.dispatch("memory.open", {"path": str(bad)})
+        self.assertEqual(error.exception.code, "SCAN_RUNNING")
+
     def test_reveal_opens_file_manager_with_photo_selected(self):
         photo_path = self.photos / "selected.png"
         png(photo_path)

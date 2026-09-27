@@ -16,6 +16,10 @@ Item {
   property bool actionPending: false
   property string view: "loading"
   property string message: ""
+  property string locationMessage: ""
+  property bool moreOpen: false
+  property bool choosingPhoto: false
+  property string libraryMessage: ""
   property string suggestedPath: ""
   property int promptIndex: 0
   property int requestToken: 0
@@ -77,6 +81,8 @@ Item {
   }
 
   function open(payloadJson) {
+    moreOpen = false
+    libraryMessage = ""
     opened = true
     actionPending = false
     message = ""
@@ -93,6 +99,14 @@ Item {
   }
 
   function begin() {
+    if (!opened)
+      return
+    if (service.failed) {
+      actionPending = false
+      view = "error"
+      message = service.lastError
+      return
+    }
     if (!service.ready) {
       view = "loading"
       readyRetry.restart()
@@ -130,6 +144,7 @@ Item {
   }
 
   function showEntry(entry, index, markShown, existingToken) {
+    locationMessage = ""
     var token = existingToken || beginRequest()
     view = "loading"
     sessionIndex = index
@@ -290,7 +305,57 @@ Item {
     currentEntry = updated
   }
 
+  function openSpecificPhoto() {
+    moreOpen = false
+    if (actionPending || !service || service.scanRunning)
+      return
+    if (view === "memory")
+      captureCurrentNote()
+    var token = beginRequest()
+    choosingPhoto = true
+    service.choosePhoto(function(result, error) {
+      choosingPhoto = false
+      if (!opened || token !== requestToken)
+        return
+      actionPending = false
+      if (!result) {
+        libraryMessage = error ? error.message : ""
+        keyboardScope.forceActiveFocus()
+        return
+      }
+      libraryMessage = ""
+      var entries = sessionEntries.slice(0, sessionIndex + 1)
+      var entry = makeEntry(result.memory)
+      entries.push(entry)
+      sessionEntries = entries
+      showEntry(entry, entries.length - 1, true)
+    })
+  }
+
+  function showLocation() {
+    if (view !== "memory" || actionPending || !currentMemory)
+      return
+    var token = beginRequest()
+    locationMessage = "Reading photo location…"
+    service.photoLocation(currentMemory.id, function(result, error) {
+      if (!opened || token !== requestToken)
+        return
+      actionPending = false
+      if (!result) {
+        locationMessage = error ? error.message : "Could not read this photo's location."
+        return
+      }
+      if (Qt.openUrlExternally(result.url)) {
+        locationMessage = ""
+        root.dismiss()
+      } else {
+        locationMessage = "Could not open your browser."
+      }
+    })
+  }
+
   function close() {
+    moreOpen = false
     requestToken += 1
     actionPending = false
     if (currentEntry && view === "memory")
@@ -334,7 +399,7 @@ Item {
 
   PanelWindow {
     id: panel
-    visible: root.opened
+    visible: root.opened && !root.choosingPhoto
     anchors {
       top: true
       bottom: true
@@ -384,6 +449,13 @@ Item {
         focus: true
         Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
+          if (root.moreOpen && event.key === Qt.Key_Escape) {
+            root.moreOpen = false
+            event.accepted = true
+            return
+          }
+          if (root.moreOpen)
+            return
           var action = Model.keyboardAction(
             event.key,
             event.modifiers,
@@ -410,8 +482,75 @@ Item {
           event.accepted = true
         }
 
+        Row {
+          id: libraryToolbar
+          anchors.top: parent.top
+          width: parent.width
+          spacing: Style.space(8)
+          Text {
+            width: parent.width - moreButton.width - parent.spacing
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.libraryMessage || (service ? service.scanMessage : "")
+            textFormat: Text.PlainText
+            elide: Text.ElideRight
+            color: Color.menu.text
+            opacity: .7
+            font.pixelSize: Style.font.body
+          }
+          Button {
+            id: moreButton
+            text: "⋯"
+            tooltipText: "Library actions"
+            enabled: service && service.ready
+            onClicked: root.moreOpen = !root.moreOpen
+          }
+        }
+
+        MouseArea {
+          z: 9
+          visible: root.moreOpen
+          anchors.fill: parent
+          onClicked: root.moreOpen = false
+        }
+
+        Rectangle {
+          z: 10
+          visible: root.moreOpen
+          anchors.top: libraryToolbar.bottom
+          anchors.right: parent.right
+          width: Style.space(260)
+          height: moreActions.implicitHeight + Style.space(16)
+          color: Color.menu.background
+          border.color: Color.menu.border
+          radius: Style.cornerRadius
+          Column {
+            id: moreActions
+            anchors.fill: parent
+            anchors.margins: Style.space(8)
+            Button {
+              width: parent.width
+              text: "Open specific photo…"
+              leftAlign: true
+              enabled: service && service.status.onboarded && !service.scanRunning && !root.actionPending
+              onClicked: root.openSpecificPhoto()
+            }
+            Button {
+              width: parent.width
+              text: service && service.scanRunning ? "Scanning folders…" : "Rescan photo folders"
+              leftAlign: true
+              enabled: service && service.status.onboarded && !service.scanRunning
+              onClicked: {
+                root.moreOpen = false
+                root.libraryMessage = ""
+                service.scan()
+              }
+            }
+          }
+        }
+
         Column {
           anchors.fill: parent
+          anchors.topMargin: libraryToolbar.height + Style.space(8)
           spacing: 0
 
           Item {
@@ -559,6 +698,15 @@ Item {
                 width: parent.width
                 spacing: Style.space(8)
 
+                Text {
+                  visible: root.locationMessage !== ""
+                  width: parent.width
+                  text: root.locationMessage
+                  textFormat: Text.PlainText
+                  wrapMode: Text.WordWrap
+                  color: Color.menu.text
+                }
+
                 Rectangle {
                   visible: root.reflection !== null
                   width: parent.width
@@ -695,10 +843,16 @@ Item {
                     }
 
                     Button {
-                      iconText: "󰑓"
-                      tooltipText: "Rotate preview clockwise"
-                      fontFamily: "Symbols Nerd Font Mono"
+                      iconText: "⤵"
+                      tooltipText: "Rotate preview 90° clockwise"
                       onClicked: root.rotatePreview()
+                    }
+
+                    Button {
+                      iconText: "󰍎"
+                      tooltipText: "Open photo location in your browser and close Memory Lane (shares coordinates with OpenStreetMap)"
+                      fontFamily: "Symbols Nerd Font Mono"
+                      onClicked: root.showLocation()
                     }
 
                     Button {

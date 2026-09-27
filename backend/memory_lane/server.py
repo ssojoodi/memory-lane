@@ -6,10 +6,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .database import connect, utcnow
-from .library import canonical_root, scan_root
+from .library import canonical_root, open_photo, scan_root
 from .paths import suggested_pictures
 from .previews import ensure_preview
 from .selection import select_next_photo
+from .location import map_url
 
 MAX_FRAME_BYTES = 16 * 1024
 MAX_NOTE_BYTES = 8 * 1024
@@ -90,6 +91,15 @@ class Server:
             self.scan_running = True
             threading.Thread(target=self._scan, daemon=True).start()
             return {"started": True}
+        if method == "memory.open":
+            if self.scan_running:
+                raise ApiError("SCAN_RUNNING", "Wait for the folder scan to finish before opening a specific photo.")
+            try:
+                row = open_photo(self.db, str(p.get("path", "")))
+            except (OSError, ValueError) as exc:
+                raise ApiError("PHOTO_UNAVAILABLE", str(exc) if isinstance(exc, ValueError)
+                               else "That photo is missing or unreadable.")
+            return {"memory": self.photo(row)}
         if method == "memory.next":
             photo = select_next_photo(self.db)
             if not photo:
@@ -166,6 +176,19 @@ class Server:
             )
             self.db.commit()
             return {"savedAt": now}
+        if method == "photo.location":
+            row = self.db.execute(
+                "SELECT path FROM photos WHERE id=?", (int(p["photoId"]),)
+            ).fetchone()
+            if not row or not Path(row["path"]).is_file() or Path(row["path"]).is_symlink():
+                raise ApiError("PHOTO_MISSING", "The original photograph is no longer available.")
+            try:
+                url = map_url(Path(row["path"]))
+            except (OSError, subprocess.SubprocessError):
+                raise ApiError("LOCATION_UNAVAILABLE", "Could not read this photo's location.")
+            if not url:
+                raise ApiError("NO_LOCATION", "This photo has no usable embedded GPS location.")
+            return {"url": url}
         if method == "original.reveal":
             row = self.db.execute(
                 "SELECT path FROM photos WHERE id=?", (int(p["photoId"]),)
@@ -191,7 +214,7 @@ class Server:
                 "SELECT id,path FROM library_roots WHERE enabled=1"
             ).fetchall()
             generation = int(datetime.now(timezone.utc).timestamp() * 1000)
-            totals = {"seen": 0, "eligible": 0, "errors": 0}
+            totals = {"seen": 0, "eligible": 0, "errors": 0, "added": 0}
             for library_root in roots:
                 stats = scan_root(
                     connection,
