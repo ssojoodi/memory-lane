@@ -1,10 +1,10 @@
 import json
-import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .paths import database_path
+from .storage import open_private_database
 
 
 def utcnow():
@@ -12,20 +12,21 @@ def utcnow():
 
 
 def connect(path=None):
-    target = Path(path) if path else database_path()
-    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    con = sqlite3.connect(target, timeout=3)
+    con = open_private_database(path or database_path())
+    try:
+        configure(con)
+        migrate(con)
+        return con
+    except BaseException:
+        con.close()
+        raise
+
+
+def configure(con):
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys=ON")
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA synchronous=NORMAL")
-    con.execute("PRAGMA busy_timeout=3000")
-    migrate(con)
-    try:
-        os.chmod(target, 0o600)
-    except FileNotFoundError:
-        pass
-    return con
 
 
 def migrate(con):

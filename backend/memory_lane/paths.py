@@ -10,7 +10,8 @@ def _private(path: Path) -> Path:
 
 def data_dir() -> Path:
     base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
-    return _private(base / "memory-lane")
+    # Database creation validates and creates this directory via descriptors.
+    return base / "memory-lane"
 
 
 def cache_dir() -> Path:
