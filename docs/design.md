@@ -27,6 +27,9 @@ with the same 16 KiB ceiling before it reaches application state.
 
 ## Photo selection
 
+Within each pool, SQLite chooses randomly across every eligible photo, without
+an ID-ordered shortlist. Back/forward navigation still replays session history.
+
 The preferred pool is intentionally varied:
 
 - 80% fresh photos without a reflection, using the configured cooldown.

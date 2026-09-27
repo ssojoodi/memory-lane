@@ -137,6 +137,34 @@ class MemoryLaneTest(unittest.TestCase):
         result = server.dispatch("memory.next", {})
         self.assertEqual(result["memory"]["id"], photo_id)
 
+    def test_random_selection_considers_entire_pool(self):
+        from memory_lane.selection import _candidate
+        con = self.connection()
+        con.execute("INSERT INTO library_roots(path,created_at) VALUES(?, '2020-01-01')", (str(self.photos),))
+        con.executemany(
+            "INSERT INTO photos(root_id,path,mime_type,size_bytes,mtime_ns,created_at,updated_at) "
+            "VALUES(1,?,'image/png',1,1,'2020-01-01','2020-01-01')",
+            [(str(self.photos / f"{index}.png"),) for index in range(260)],
+        )
+        # Control SQLite's random scores, not probability: every eligible row
+        # must participate, including entries beyond both former pool limits.
+        scores = []
+        def score():
+            scores.append(len(scores) + 1)
+            return -scores[-1]
+        con.create_function("random", 0, score)
+        for annotated in (False, True):
+            if annotated:
+                con.execute("INSERT INTO reflections(photo_id,prompt_id,prompt_text,note,created_at,updated_at) "
+                            "SELECT id,'test','test','note','2020-01-01','2020-01-01' FROM photos")
+            scores.clear()
+            row = _candidate(con, annotated=annotated)
+            self.assertEqual(len(scores), 260)
+            self.assertGreater(row["id"], 200)
+        scores.clear()
+        self.assertIsNotNone(_candidate(con, include_skipped=True))
+        self.assertEqual(len(scores), 260)
+
     def test_skipped_photo_is_last_resort(self):
         png(self.photos / "only-photo.png")
         server = self.server()

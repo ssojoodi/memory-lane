@@ -5,8 +5,6 @@ from datetime import datetime, timedelta, timezone
 
 RESURFACE_CHANCE = 0.2
 RESURFACE_COOLDOWN_DAYS = 7
-RANDOM_POOL_SIZE = 50
-QUERY_LIMIT = 200
 
 
 def _cutoff(days):
@@ -15,13 +13,12 @@ def _cutoff(days):
     )
 
 
-def _candidates(
+def _candidate(
     connection,
     *,
     annotated=None,
     shown_before=None,
     include_skipped=False,
-    annotated_order=False,
 ):
     joins = "JOIN reflections f ON f.photo_id=p.id" if annotated is True else ""
     conditions = ["r.enabled=1", "p.available=1", "p.hidden_at IS NULL"]
@@ -41,18 +38,13 @@ def _candidates(
             "AND date(e.occurred_at,'localtime')=date('now','localtime'))"
         )
 
-    order = (
-        "COALESCE(p.last_shown_at,f.updated_at),p.id"
-        if annotated_order
-        else "CASE WHEN p.last_shown_at IS NULL THEN 0 ELSE 1 END,p.last_shown_at,p.id"
-    )
     query = f"""SELECT p.* FROM photos p
         JOIN library_roots r ON r.id=p.root_id
         {joins}
         WHERE {' AND '.join(conditions)}
-        ORDER BY {order}
-        LIMIT {QUERY_LIMIT}"""
-    return connection.execute(query, parameters).fetchall()
+        ORDER BY RANDOM()
+        LIMIT 1"""
+    return connection.execute(query, parameters).fetchone()
 
 
 def select_next_photo(connection):
@@ -61,27 +53,24 @@ def select_next_photo(connection):
     ).fetchone()
     fresh_cooldown = int(json.loads(setting[0])) if setting else 90
 
-    fresh = _candidates(
+    fresh = _candidate(
         connection,
         annotated=False,
         shown_before=_cutoff(fresh_cooldown),
     )
-    annotated = _candidates(
+    annotated = _candidate(
         connection,
         annotated=True,
         shown_before=_cutoff(RESURFACE_COOLDOWN_DAYS),
-        annotated_order=True,
     )
 
     if annotated and (not fresh or random.random() < RESURFACE_CHANCE):
-        pool = annotated
+        selected = annotated
     else:
-        pool = fresh
+        selected = fresh
 
-    if not pool:
-        pool = _candidates(connection)
-    if not pool:
-        pool = _candidates(connection, include_skipped=True)
-    if not pool:
-        return None
-    return random.choice(pool[:RANDOM_POOL_SIZE])
+    if selected is None:
+        selected = _candidate(connection)
+    if selected is None:
+        selected = _candidate(connection, include_skipped=True)
+    return selected
