@@ -64,10 +64,30 @@ function truncateUtf8(value, maxBytes) {
 }
 
 function appendBounded(current, chunk, maxBytes) {
-  var value = String(current || "") + String(chunk || "")
-  return utf8ByteLength(value) > maxBytes
+  current = String(current || "")
+  chunk = String(chunk || "")
+  return utf8ByteLength(current) + utf8ByteLength(chunk) > maxBytes
     ? {value: "", overflow: true}
-    : {value: value, overflow: false}
+    : {value: current + chunk, overflow: false}
+}
+
+function consumeLines(current, chunk, maxBytes, onLine) {
+  chunk = String(chunk)
+  var start = 0
+  while (start < chunk.length) {
+    var end = chunk.indexOf("\n", start)
+    var segment = chunk.slice(start, end < 0 ? chunk.length : end)
+    var next = appendBounded(current, segment, maxBytes - 1)
+    if (next.overflow)
+      return next
+    current = next.value
+    if (end < 0)
+      break
+    onLine(current)
+    current = ""
+    start = end + 1
+  }
+  return {value: current, overflow: false}
 }
 
 function fileUrl(path) {
@@ -116,6 +136,7 @@ if (typeof module !== "undefined") {
     MAX_NOTE_BYTES: MAX_NOTE_BYTES,
     prompts: prompts,
     appendBounded: appendBounded,
+    consumeLines: consumeLines,
     cyclePrompt: cyclePrompt,
     fileUrl: fileUrl,
     dirty: dirty,

@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import test_backend
-from memory_lane.location import coordinate, map_url
+from memory_lane.location import coordinate, map_url, _map_url
 from memory_lane.server import ApiError
 
 
@@ -26,22 +26,26 @@ class LocationTest(unittest.TestCase):
             with self.subTest(value=value, ref=ref), self.assertRaises((ValueError, ZeroDivisionError)):
                 coordinate(value, ref, "N", "S", 90)
 
-    @patch("memory_lane.location.subprocess.run")
+    @patch("memory_lane.location.bounded_output")
     def test_marker_and_read_only_commands(self, run):
         run.side_effect = [subprocess.CompletedProcess([], 0, value)
                            for value in ("35 30 0", "N", "139 45 0", "E")]
-        url = map_url(Path("/tmp/a photo.jpg"))
+        with tempfile.TemporaryFile() as stream:
+            descriptor = stream.fileno()
+            url = _map_url(stream)
         self.assertEqual(url, "https://www.openstreetmap.org/?mlat=35.500000&mlon=139.750000#map=16/35.500000/139.750000")
         self.assertEqual(run.call_count, 4)
         for call in run.call_args_list:
             self.assertEqual(call.args[0][0:2], ["vipsheader", "-f"])
-            self.assertEqual(call.args[0][-1], "/tmp/a photo.jpg")
+            self.assertEqual(call.args[0][-1], f"/proc/self/fd/{descriptor}")
+            self.assertEqual(call.kwargs["pass_fds"], (descriptor,))
             self.assertEqual(call.kwargs["timeout"], 2)
 
-    @patch("memory_lane.location.subprocess.run")
+    @patch("memory_lane.location.bounded_output")
     def test_no_metadata(self, run):
         run.return_value = subprocess.CompletedProcess([], 1, "")
-        self.assertIsNone(map_url(Path("/tmp/photo.jpg")))
+        with tempfile.TemporaryFile() as stream:
+            self.assertIsNone(_map_url(stream))
 
     @unittest.skipUnless(shutil.which("vips") and shutil.which("vipsheader"), "libvips is required")
     def test_real_jpeg_metadata(self):

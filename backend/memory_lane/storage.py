@@ -11,17 +11,31 @@ class UnsafeStorageError(OSError):
     pass
 
 
+@contextmanager
+def private_directory(path):
+    """Hold a checked private state/cache directory open for relative I/O."""
+    fd = _open_directory(path)
+    try:
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def check_private_file(directory_fd, name):
+    return _check_file(directory_fd, name)
+
+
 def _check_directory(fd, private=False):
     info = os.fstat(fd)
     if not stat.S_ISDIR(info.st_mode):
-        raise UnsafeStorageError("Database storage must be a directory.")
+        raise UnsafeStorageError("Private storage must be a directory.")
     if private:
         if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) & 0o077:
-            raise UnsafeStorageError("Database directory must be owned by you and private (0700).")
+            raise UnsafeStorageError("Storage directory must be owned by you and private (0700).")
     elif info.st_uid not in (0, os.geteuid()) or (
         info.st_mode & 0o022 and not info.st_mode & stat.S_ISVTX
     ):
-        raise UnsafeStorageError("Database ancestor directory has unsafe ownership or permissions.")
+        raise UnsafeStorageError("Storage ancestor directory has unsafe ownership or permissions.")
 
 
 def _open_directory(path):
@@ -62,7 +76,7 @@ def _check_file(directory_fd, name, required=False):
         info = os.fstat(fd)
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
                 or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) & 0o077):
-            raise UnsafeStorageError("Database and journal files must be private, owned regular files without links.")
+            raise UnsafeStorageError("Stored files must be private, owned regular files without links.")
         return info.st_dev, info.st_ino
     finally:
         os.close(fd)

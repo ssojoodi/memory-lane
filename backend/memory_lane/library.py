@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from .database import utcnow
+from .photo_files import photo_file
 
 EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 DEFAULT_DIRS = {"screenshots", "screenshot", "downloads", "thumbnails", ".thumbnails", "cache", ".cache", "trash", ".trash"}
@@ -13,7 +14,7 @@ def mime_type(path):
     if path.suffix.lower() not in EXTENSIONS:
         return None
     try:
-        with path.open("rb") as stream:
+        with photo_file(path) as stream:
             head = stream.read(12)
     except OSError:
         return None
@@ -37,7 +38,8 @@ def index_photo(con, root_id, path, generation):
     mime = mime_type(path)
     if not mime or path.is_symlink():
         raise ValueError("Choose a supported JPEG, PNG, or WebP photo (not a link).")
-    info = path.stat()
+    with photo_file(path) as stream:
+        info = os.fstat(stream.fileno())
     is_new = con.execute("SELECT 1 FROM photos WHERE path=?", (str(path),)).fetchone() is None
     now = utcnow()
     con.execute("""INSERT INTO photos(root_id,path,device,inode,mime_type,size_bytes,mtime_ns,last_seen_generation,available,created_at,updated_at)
@@ -65,7 +67,11 @@ def open_photo(con, raw_path):
 
 
 def scan_root(con, root_id, raw_path, generation, progress=None):
-    root = canonical_root(raw_path)
+    root = Path(raw_path).absolute()
+    if any(part.is_symlink() for part in (root, *root.parents)):
+        raise ValueError("The approved photo folder now contains a symbolic link.")
+    if not root.is_dir():
+        raise ValueError("The approved photo folder is unavailable.")
     seen = eligible = errors = added = 0
     stack = [root]
     while stack:

@@ -599,6 +599,7 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 color: Color.menu.text
                 text: root.suggestedPath
+                textFormat: Text.PlainText
               }
 
               Row {
@@ -722,6 +723,7 @@ Item {
 
                   Text {
                     id: memoryText
+                    textFormat: Text.PlainText
                     anchors.fill: parent
                     anchors.margins: Style.space(8)
                     wrapMode: Text.WordWrap
@@ -877,6 +879,7 @@ Item {
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
                 text: root.message || (service ? service.lastError : "")
+                textFormat: Text.PlainText
                 color: Color.menu.text
                 font.pixelSize: Style.font.heading
               }

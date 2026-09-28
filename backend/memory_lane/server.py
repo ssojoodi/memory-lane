@@ -25,7 +25,7 @@ class Server:
     def __init__(self, db_path=None, inp=None, out=None):
         self.db_path = db_path
         self.db = connect(db_path)
-        self.inp = inp or sys.stdin
+        self.inp = inp if inp is not None else sys.stdin.buffer
         self.out = out or sys.stdout
         self.write_lock = threading.Lock()
         self.scan_running = False
@@ -117,7 +117,7 @@ class Server:
             try:
                 preview = ensure_preview(row)
             except (OSError, subprocess.SubprocessError):
-                preview = row["path"]
+                raise ApiError("PREVIEW_UNAVAILABLE", "Could not safely load this photo's preview.")
             return {"path": preview, "sourcePath": row["path"]}
         if method in ("memory.shown", "memory.skip"):
             photo_id = int(p["photoId"])
@@ -246,11 +246,19 @@ class Server:
 
     def run(self):
         self.emit({"event": "ready", "data": {"protocolVersion": 1}})
-        for raw in self.inp:
+        while True:
+            raw = self.inp.readline(MAX_FRAME_BYTES + 1)
+            if not raw:
+                break
             request_id = None
             try:
-                if len(raw.encode("utf-8")) > MAX_FRAME_BYTES:
-                    raise ApiError("FRAME_TOO_LARGE", "Request is too large.")
+                size = len(raw) if isinstance(raw, bytes) else len(raw.encode("utf-8"))
+                if size > MAX_FRAME_BYTES:
+                    self.emit({"id": None, "ok": False, "error": {
+                        "code": "FRAME_TOO_LARGE", "message": "Request is too large."}})
+                    return  # Do not buffer/drain an unbounded unterminated frame.
+                if isinstance(raw, bytes):
+                    raw = raw.decode("utf-8")
                 request = json.loads(raw)
                 request_id = request.get("id")
                 if (

@@ -35,3 +35,15 @@ assert.deepEqual(
   {value: "", overflow: true}
 )
 console.log("MemoryLaneModel tests passed")
+
+let lines = []
+let frame = model.consumeLines("", "ab", 5, line => lines.push(line))
+assert.equal(frame.value, "ab")
+frame = model.consumeLines(frame.value, "cd\nx\ny", 5, line => lines.push(line))
+assert.deepEqual(lines, ["abcd", "x"])
+assert.equal(frame.value, "y")
+assert.equal(model.consumeLines("abcd", "e", 5, () => assert.fail()).overflow, true)
+assert.equal(model.consumeLines("", "éé\n", 5, () => {}).overflow, false)
+assert.equal(model.consumeLines("", "ééé", 5, () => assert.fail()).overflow, true)
+assert.equal(model.consumeLines("", "x".repeat(100000), 16384, () => assert.fail()).overflow, true)
+assert.equal(model.consumeLines("", "x\n".repeat(20000), 5, () => {}).overflow, false)

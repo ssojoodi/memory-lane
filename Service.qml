@@ -23,6 +23,8 @@ Item {
   property bool chooserOverflow: false
   property var chooserCallback: null
   property bool choosingPhoto: false
+  property string responseBuffer: ""
+  property string errorBuffer: ""
 
   readonly property int maxFrameBytes: 16 * 1024
 
@@ -39,6 +41,12 @@ Item {
       id: nextId++,
       method: method,
       params: params || {}
+    }
+    if (Model.utf8ByteLength(JSON.stringify(request) + "\n") > maxFrameBytes) {
+      lastError = "The request is too large."
+      if (callback)
+        callback(null, {message: lastError})
+      return -1
     }
     callbacks[request.id] = callback || function() {}
     if (!ready)
@@ -69,7 +77,32 @@ Item {
     failed = true
     ready = false
     scanRunning = false
+    responseBuffer = ""
+    errorBuffer = ""
     failPending(message)
+  }
+
+  function collectBackendOutput(chunk, isError) {
+    if (failed)
+      return
+    var parsed = Model.consumeLines(isError ? errorBuffer : responseBuffer,
+      chunk, maxFrameBytes, function(line) {
+        if (root.failed)
+          return
+        if (isError)
+          root.lastError = String(line).replace(/\/[^ ]+/g, "[path]").substring(0, 240)
+        else
+          root.handle(line)
+      })
+    if (parsed.overflow) {
+      failService("The local photo service exceeded its output limit.")
+      backend.running = false
+    } else if (!failed) {
+      if (isError)
+        errorBuffer = parsed.value
+      else
+        responseBuffer = parsed.value
+    }
   }
 
   function handle(line) {
@@ -77,7 +110,13 @@ Item {
     try {
       message = JSON.parse(String(line))
     } catch (error) {
-      lastError = "The local photo service returned invalid data."
+      failService("The local photo service returned invalid data.")
+      backend.running = false
+      return
+    }
+    if (!message || typeof message !== "object" || Array.isArray(message)) {
+      failService("The local photo service returned invalid data.")
+      backend.running = false
       return
     }
 
@@ -274,14 +313,15 @@ Item {
     command: ["/usr/bin/python3", root.backendPath]
     running: root.backendPath !== ""
     stdout: SplitParser {
-      onRead: function(line) {
-        root.handle(line)
+      splitMarker: ""
+      onRead: function(chunk) {
+        root.collectBackendOutput(chunk, false)
       }
     }
     stderr: SplitParser {
-      onRead: function(line) {
-        var sanitized = String(line).replace(/\/[^ ]+/g, "[path]")
-        root.lastError = sanitized.substring(0, 240)
+      splitMarker: ""
+      onRead: function(chunk) {
+        root.collectBackendOutput(chunk, true)
       }
     }
     onExited: function(exitCode) {

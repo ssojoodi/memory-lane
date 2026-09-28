@@ -1,8 +1,9 @@
 """Read embedded GPS coordinates locally using the existing libvips tools."""
 
 import math
-import subprocess
 from fractions import Fraction
+from .photo_files import photo_file
+from .process_output import bounded_output
 
 
 def coordinate(value, reference, positive, negative, limit):
@@ -18,11 +19,17 @@ def coordinate(value, reference, positive, negative, limit):
 
 
 def map_url(path):
+    with photo_file(path) as stream:
+        return _map_url(stream)
+
+
+def _map_url(stream):
     fields = {}
     for name in ("GPSLatitude", "GPSLatitudeRef", "GPSLongitude", "GPSLongitudeRef"):
-        result = subprocess.run(
-            ["vipsheader", "-f", "exif-ifd3-" + name, str(path)],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=2,
+        result = bounded_output(
+            ["vipsheader", "-f", "exif-ifd3-" + name, f"/proc/self/fd/{stream.fileno()}"],
+            pass_fds=(stream.fileno(),),
+            timeout=2,
         )
         if result.returncode != 0:
             return None

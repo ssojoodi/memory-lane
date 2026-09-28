@@ -12,6 +12,7 @@ or modifies original files.
 - Library actions in the **⋯** menu: open a specific photo from an approved
   folder (without waiting for a scan), or rescan folders in the background.
   Rescans keep your current photo and unsaved text in place and report new photos.
+
 - Map-pin button opens embedded photo GPS coordinates on OpenStreetMap;
   coordinates are shared only when clicked, never the photo or notes.
 - Private scanning of user-approved folders
@@ -23,6 +24,10 @@ or modifies original files.
 - One-click access to the original photograph
 
 ## Install
+
+Existing installations: read the [storage upgrade checklist](docs/security-upgrade.md)
+before installing the storage-hardening update. Old database sidecar permissions
+may require a supervised, backup-first migration.
 
 Install and enable Memory Lane directly from its public repository:
 

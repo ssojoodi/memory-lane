@@ -15,13 +15,18 @@ python3 - <<'PY'
 from pathlib import Path
 service = Path("Service.qml").read_text()
 assert "StdioCollector" not in service
-assert 'splitMarker: ""' in service
+assert service.count('splitMarker: ""') == service.count('SplitParser {')
+assert "Model.consumeLines" in service
 assert "manifest.__sourceDir" not in service
 assert 'Qt.resolvedUrl("backend/memory_lane_backend.py")' in service
 assert "id: startupTimeout" in service
 assert "root.failService(" in service
 overlay = Path("MemoryLane.qml").read_text()
 assert "if (service.failed)" in overlay
+import re
+for text_block in re.findall(r'\bText\s*\{([^{}]*)\}', overlay, re.S):
+    if any(value in text_block for value in ("root.reflection", "root.suggestedPath", "root.message", "root.libraryMessage", "root.locationMessage")):
+        assert "textFormat: Text.PlainText" in text_block
 PY
 if rg -n 'urllib|requests|http.client' backend Service.qml MemoryLane.qml BarWidget.qml; then
   echo "Network-capable runtime source detected" >&2; exit 1

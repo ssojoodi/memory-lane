@@ -30,3 +30,20 @@ An existing installation with a symlinked storage path or nonprivate database
 permissions now stops instead of opening it. Inspect the path and preserve your
 notes before manually relocating it to a real private directory. No database
 content is rewritten or discarded to remediate an unsafe path.
+
+Preview caches now use the same checked-directory and private-file rules.
+Source images are opened through no-follow directory traversal and verified
+as regular files before reads. Preview generation and GPS extraction inherit
+the checked file descriptor, not an unchecked filename. Failed preview
+generation produces an error rather than displaying the original directly.
+Saved notes, paths, and errors are rendered as plain text, never HTML.
+
+Backend stdout/stderr are parsed in immediate chunks with a 16 KiB per-line
+limit. Requests are read with a bounded byte read before JSON parsing; an
+oversized request closes the backend rather than draining an unlimited stream.
+GPS metadata subprocess output is bounded and timed out; preview diagnostics
+are discarded. These limits do not constitute a sandbox for native image
+decoders or protect against all resource-heavy image files.
+
+See [the backup-first upgrade checklist](security-upgrade.md) before deploying
+to an older installation with nonprivate SQLite sidecars or unsafe cache paths.

@@ -1,31 +1,43 @@
 import hashlib
 import os
 import subprocess
-import tempfile
+import uuid
 from pathlib import Path
 
 from .paths import cache_dir
+from .photo_files import photo_file
+from .storage import check_private_file, private_directory
 
 
 def ensure_preview(photo):
     source = Path(photo["path"])
-    stat = source.stat()
-    key = hashlib.blake2b(f"{source}\0{stat.st_size}\0{stat.st_mtime_ns}".encode(), digest_size=20).hexdigest()
-    target = cache_dir() / f"{key}.jpg"
-    if target.exists():
-        return str(target)
-    fd, temporary = tempfile.mkstemp(prefix="preview-", suffix=".jpg", dir=cache_dir())
-    os.close(fd)
-    env = dict(os.environ)
-    env["VIPS_CONCURRENCY"] = "1"
-    try:
-        subprocess.run(["vipsthumbnail", str(source), "--size", "1600x1200", "--path", temporary + "[strip]"],
-                       env=env, timeout=20, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        os.replace(temporary, target)
-        os.chmod(target, 0o600)
-        return str(target)
-    finally:
+    with photo_file(source) as stream, private_directory(cache_dir()) as directory:
+        info = os.fstat(stream.fileno())
+        key = hashlib.blake2b(
+            f"{source}\0{info.st_dev}\0{info.st_ino}\0{info.st_size}\0{info.st_mtime_ns}".encode(),
+            digest_size=20,
+        ).hexdigest()
+        name = f"{key}.jpg"
+        target = cache_dir() / name
+        if check_private_file(directory, name) is not None:
+            return str(target)
+        temporary = f"preview-{uuid.uuid4().hex}.jpg"
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                     0o600, dir_fd=directory)
+        os.close(fd)
         try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
+            subprocess.run(
+                ["vipsthumbnail", f"/proc/self/fd/{stream.fileno()}", "--size", "1600x1200",
+                 "--path", f"/proc/self/fd/{directory}/{temporary}[strip]"],
+                pass_fds=(stream.fileno(), directory), env={**os.environ, "VIPS_CONCURRENCY": "1"},
+                timeout=20, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            check_private_file(directory, temporary)
+            check_private_file(directory, name)
+            os.replace(temporary, name, src_dir_fd=directory, dst_dir_fd=directory)
+            return str(target)
+        finally:
+            try:
+                os.unlink(temporary, dir_fd=directory)
+            except FileNotFoundError:
+                pass

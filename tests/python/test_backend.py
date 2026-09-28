@@ -109,6 +109,36 @@ class MemoryLaneTest(unittest.TestCase):
         self.connections.remove(con)
         self.assertEqual(self.db.stat().st_mode & 0o777, 0o600)
 
+    def test_request_reader_stops_at_byte_limit(self):
+        incoming = io.BytesIO(b"x" * (MAX_FRAME_BYTES * 4))
+        outgoing = io.StringIO()
+        self.server(incoming, outgoing).run()
+        self.assertEqual(incoming.tell(), MAX_FRAME_BYTES + 1)
+        frames = [json.loads(line) for line in outgoing.getvalue().splitlines()]
+        self.assertEqual(frames[-1]["error"]["code"], "FRAME_TOO_LARGE")
+
+    def test_preview_failure_never_returns_original(self):
+        png(self.photos / "photo.png")
+        server = self.server()
+        server.dispatch("library.rootAdd", {"path": str(self.photos)})
+        scan_root(server.db, 1, self.photos, 1)
+        with patch("memory_lane.server.ensure_preview", side_effect=OSError("unsafe")):
+            with self.assertRaises(ApiError) as error:
+                server.dispatch("preview.ensure", {"photoId": 1})
+            self.assertEqual(error.exception.code, "PREVIEW_UNAVAILABLE")
+
+    def test_rescan_rejects_replaced_root_link(self):
+        server = self.server()
+        server.dispatch("library.rootAdd", {"path": str(self.photos)})
+        self.photos.rename(self.base / "old-photos")
+        external = self.base / "external"
+        external.mkdir()
+        png(external / "not-approved.png")
+        self.photos.symlink_to(external, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            scan_root(server.db, 1, self.photos, 1)
+        self.assertEqual(server.db.execute("SELECT count(*) FROM photos").fetchone()[0], 0)
+
     def test_annotated_photos_are_occasionally_resurfaced(self):
         png(self.photos / "annotated.png")
         png(self.photos / "fresh.png")
