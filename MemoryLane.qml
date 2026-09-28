@@ -29,9 +29,7 @@ Item {
   property var currentEntry: null
   property string initialNote: ""
 
-  readonly property var prompt: Model.prompts[promptIndex]
   readonly property var currentMemory: currentEntry ? currentEntry.memory : null
-  readonly property var reflection: currentEntry ? currentEntry.reflection : null
   readonly property string previewPath: currentEntry ? currentEntry.previewPath : ""
   readonly property int previewRotation: currentEntry
     ? (currentEntry.rotationDegrees || 0)
@@ -44,9 +42,7 @@ Item {
   }
 
   function makeEntry(memory) {
-    var note = memory.reflection
-      ? memory.reflection.note
-      : (memory.draft ? memory.draft.note : "")
+    var note = Model.journalNote(memory)
     return {
       memory: memory,
       note: note || "",
@@ -198,7 +194,7 @@ Item {
     replaceEntry(sessionIndex, updated)
     currentEntry = updated
     if (Model.dirty(initialNote, note))
-      service.saveDraft(currentMemory.id, prompt.id, note)
+      service.saveDraft(currentMemory.id, "journal", note)
     initialNote = note
   }
 
@@ -229,7 +225,7 @@ Item {
     var entry = currentEntry
     var index = sessionIndex
     var note = noteEditor.text
-    var selectedPrompt = prompt
+    var selectedPrompt = {id: "journal", text: "Photo journal"}
     var token = beginRequest()
     view = "loading"
     service.saveReflection(
@@ -471,8 +467,6 @@ Item {
             root.previousMemory()
           else if (action === "next")
             root.nextMemory()
-          else if (action === "prompt")
-            root.promptIndex = (root.promptIndex + 1) % Model.prompts.length
           else if (action === "reveal")
             root.revealOriginal()
           else if (action === "rotate")
@@ -697,7 +691,7 @@ Item {
               Column {
                 id: annotationArea
                 width: parent.width
-                spacing: Style.space(8)
+                spacing: Style.space(6)
 
                 Text {
                   visible: root.locationMessage !== ""
@@ -708,34 +702,65 @@ Item {
                   color: Color.menu.text
                 }
 
-                Rectangle {
-                  visible: root.reflection !== null
+                Item {
+                  id: promptRoller
                   width: parent.width
-                  height: visible ? memoryText.implicitHeight + Style.space(16) : 0
-                  color: Qt.rgba(1, 1, 1, .07)
-                  radius: Style.cornerRadius
-                  border.color: Qt.rgba(
-                    Color.menu.text.r,
-                    Color.menu.text.g,
-                    Color.menu.text.b,
-                    .16
-                  )
+                  height: Style.space(48)
+                  clip: true
+                  readonly property real rowHeight: Style.space(24)
+                  property real progress: 0
 
-                  Text {
-                    id: memoryText
-                    textFormat: Text.PlainText
-                    anchors.fill: parent
-                    anchors.margins: Style.space(8)
-                    wrapMode: Text.WordWrap
-                    color: Color.menu.text
-                    opacity: .82
-                    font.pixelSize: Style.font.body
-                    text: root.reflection
-                      ? Model.formatReflection(
-                          root.reflection.updated_at,
-                          root.reflection.note
-                        )
-                      : ""
+                  Repeater {
+                    model: 4
+                    Text {
+                      id: question
+                      required property int index
+                      readonly property real position: index - 1 - promptRoller.progress
+                      readonly property real tilt: position * 60
+                      readonly property real radians: tilt * Math.PI / 180
+                      visible: Math.abs(tilt) < 90
+                      y: (promptRoller.height - height) / 2
+                        + Math.sin(radians) * Style.space(25)
+                      width: promptRoller.width
+                      height: promptRoller.rowHeight
+                      verticalAlignment: Text.AlignVCenter
+                      text: Model.prompts[Model.cyclePrompt(root.promptIndex, index - 1)].text
+                      textFormat: Text.PlainText
+                      elide: Text.ElideRight
+                      color: Color.menu.text
+                      font.pixelSize: Style.font.body
+                      opacity: Math.pow(Math.max(0, Math.cos(radians)), 2)
+                      transform: Rotation {
+                        origin.x: question.width / 2
+                        origin.y: question.height / 2
+                        axis.x: 1
+                        axis.y: 0
+                        axis.z: 0
+                        angle: -question.tilt
+                      }
+                    }
+                  }
+
+                  SequentialAnimation {
+                    running: root.opened && root.view === "memory"
+                      && !root.moreOpen && !root.choosingPhoto && !root.actionPending
+                    loops: Animation.Infinite
+                    onStopped: promptRoller.progress = 0
+                    PauseAnimation { duration: 2000 }
+                    NumberAnimation {
+                      target: promptRoller
+                      property: "progress"
+                      from: 0
+                      to: 1
+                      duration: 650
+                      easing.type: Easing.InOutSine
+                    }
+                    ScriptAction {
+                      script: {
+                        root.promptIndex = Model.cyclePrompt(root.promptIndex, 1)
+                        promptRoller.progress = 0
+                      }
+                    }
                   }
                 }
 
@@ -745,50 +770,7 @@ Item {
                   spacing: Style.space(8)
 
                   Rectangle {
-                    id: promptControl
-                    width: parent.width * .36
-                    height: parent.height
-                    color: Qt.rgba(1, 1, 1, .05)
-                    radius: Style.cornerRadius
-                    border.color: Color.menu.border
-
-                    Row {
-                      anchors.fill: parent
-                      anchors.margins: Style.space(5)
-                      spacing: Style.space(5)
-
-                      Button {
-                        id: previousPrompt
-                        text: "<"
-                        tooltipText: "Previous prompt"
-                        horizontalPadding: Style.space(8)
-                        verticalPadding: Style.space(4)
-                        onClicked: root.promptIndex = Model.cyclePrompt(root.promptIndex, -1)
-                      }
-
-                      Text {
-                        width: parent.width - previousPrompt.width - nextPrompt.width - parent.spacing * 2
-                        anchors.verticalCenter: parent.verticalCenter
-                        elide: Text.ElideRight
-                        horizontalAlignment: Text.AlignHCenter
-                        text: root.prompt.text
-                        color: Color.menu.text
-                        font.pixelSize: Style.font.body
-                      }
-
-                      Button {
-                        id: nextPrompt
-                        text: ">"
-                        tooltipText: "Next prompt"
-                        horizontalPadding: Style.space(8)
-                        verticalPadding: Style.space(4)
-                        onClicked: root.promptIndex = Model.cyclePrompt(root.promptIndex, 1)
-                      }
-                    }
-                  }
-
-                  Rectangle {
-                    width: parent.width - promptControl.width - actions.width - parent.spacing * 2
+                    width: parent.width - actions.width - parent.spacing
                     height: parent.height
                     color: Qt.rgba(1, 1, 1, .05)
                     radius: Style.cornerRadius
@@ -819,7 +801,7 @@ Item {
                       anchors.left: parent.left
                       anchors.top: parent.top
                       anchors.margins: Style.space(8)
-                      text: "What do you remember?"
+                      text: "Add to this photo’s story…"
                       color: Color.menu.text
                       opacity: .45
                     }
@@ -832,7 +814,7 @@ Item {
 
                     Button {
                       iconText: "󰆓"
-                      tooltipText: "Save memory"
+                      tooltipText: "Save photo journal"
                       fontFamily: "Symbols Nerd Font Mono"
                       onClicked: root.save()
                     }

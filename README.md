@@ -18,7 +18,7 @@ or modifies original files.
 - Private scanning of user-approved folders
 - Randomized presentation with occasional resurfacing of annotated photos
 - Fast keyboard navigation with session history
-- Local drafts and timestamped reflections
+- One free-flowing journal per photo, with local drafts and gently rolling questions
 - Metadata-stripped preview images
 - Session-only preview rotation that never changes the original
 - One-click access to the original photograph
@@ -61,7 +61,6 @@ Run the same command after making local changes.
 | --- | --- |
 | `Left` / `Right` | Previous / next photo |
 | `S` | Skip and advance |
-| `P` | Change prompt |
 | `R` | Rotate the displayed preview 90° clockwise |
 | `O` | Reveal original in Files |
 | `Ctrl+Enter` | Save while editing |

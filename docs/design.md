@@ -42,7 +42,11 @@ skipped today and then to any available photo.
 
 - `Left` and `Right` navigate within the current session.
 - `S` skips the current photo and advances.
-- `P` changes the prompt; the prompt controls also move backward and forward.
+- Questions roll automatically: two seconds in focus followed by a 650 ms
+  cylindrical transition using sine-positioning, X-axis tilt, and a cosine fade,
+  with the upcoming question visible. This uses only Qt Quick transforms,
+  without a 3D scene, shaders, or added dependencies. They are inspiration,
+  not separate answers; changing questions never changes the journal text.
 - `O` closes the overlay and reveals the original photograph in Files.
 - `R` rotates the displayed preview clockwise without changing any file.
 - The map-pin button reads EXIF GPS from the original on demand with
@@ -53,7 +57,9 @@ skipped today and then to any available photo.
 - `Ctrl+Enter` saves while the note editor is focused.
 
 Saving or skipping immediately advances. Drafts are preserved when navigating or
-closing. Previously saved reflections appear with their local date and time.
+closing. A single editable photo journal shows the saved note or its newer draft,
+without a duplicate saved-note card or visible timestamps. Existing stored dates
+are retained, but new saves use a neutral journal label rather than a rolling question.
 
 ## Privacy boundaries
 

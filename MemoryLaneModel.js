@@ -106,17 +106,10 @@ function rotateQuarterTurn(degrees) {
   return (Number(degrees) + 90) % 360
 }
 
-function formatReflection(timestamp, note) {
-  var date = new Date(timestamp)
-  if (isNaN(date.getTime())) return String(note || "")
-  var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  var hour = date.getHours()
-  var minute = date.getMinutes()
-  var minutes = (minute < 10 ? "0" : "") + minute
-  var meridiem = hour >= 12 ? "pm" : "am"
-  var displayHour = hour % 12 || 12
-  return months[date.getMonth()] + " " + date.getDate() + ", " + date.getFullYear()
-    + " - " + displayHour + ":" + minutes + meridiem + ": " + String(note || "")
+function journalNote(memory) {
+  // An in-progress journal takes precedence over its previously saved version.
+  return memory.draft ? String(memory.draft.note || "")
+    : (memory.reflection ? String(memory.reflection.note || "") : "")
 }
 
 function keyboardAction(key, modifiers, editorFocused) {
@@ -125,7 +118,6 @@ function keyboardAction(key, modifiers, editorFocused) {
   if (key === KEY_LEFT) return "previous"
   if (key === KEY_RIGHT) return "next"
   if (key === 83) return "skip"
-  if (key === 80) return "prompt"
   if (key === 79) return "reveal"
   if (key === 82) return "rotate"
   return ""
@@ -140,7 +132,7 @@ if (typeof module !== "undefined") {
     cyclePrompt: cyclePrompt,
     fileUrl: fileUrl,
     dirty: dirty,
-    formatReflection: formatReflection,
+    journalNote: journalNote,
     keyboardAction: keyboardAction,
     rotateQuarterTurn: rotateQuarterTurn,
     truncateUtf8: truncateUtf8,
